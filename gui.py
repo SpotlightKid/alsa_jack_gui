@@ -1,28 +1,18 @@
 """
 Gui
 """
-from PyQt5.QtWidgets import (QMainWindow, QListWidgetItem)
-
-# QWidget, QFileDialog, QAction,
-# QActionGroup, QMessageBox, QApplication
+import json
 
 from PyQt5.QtCore import QObject, QSettings  # , Qt
+from PyQt5.QtWidgets import QListWidgetItem, QMainWindow
+
 # from PyQt5.QtGui import QIcon
 from gui_ui import Ui_MainWindow
-import json
 from interface import DeviceList
 
 
-class FormatDict(dict):
-    def __missing__(self, key):
-        return "{" + key + "}"
-
-
 class DevWidgetItem(QListWidgetItem):
-    FORMAT_ACTIVE = {
-        True: "{detail} ({delay})",
-        False: "{detail}"
-    }
+    FORMAT_ACTIVE = {True: "{detail} ({delay})", False: "{detail}"}
 
     def __init__(self, device):
         # QObject.__init__(self)
@@ -32,10 +22,9 @@ class DevWidgetItem(QListWidgetItem):
         device.audio_proc.delay_changed.connect(self.updateText)
         device.audio_proc.log_message.connect(print)
 
-    def updateText(self, delay='Off'):
+    def updateText(self, delay="Off"):
         formatString = self.FORMAT_ACTIVE[self.isSelected()]
-        self.setText(formatString.format(detail=self.device.detail,
-                                         delay=delay))
+        self.setText(formatString.format(detail=self.device.detail, delay=delay))
 
     def update_audio_proc(self):
         self.device.audio_proc.setActive(self.isSelected())
@@ -97,15 +86,14 @@ class Gui(QMainWindow, Ui_MainWindow):
         self.play = GuiDeviceList(devs_play, self.list_play)
         self.record = GuiDeviceList(devs_record, self.list_record)
 
-        self.settings = QSettings('alsa_jack', 'playback')
+        self.settings = QSettings("alsa_jack", "playback")
         self.play.update()
         self.record.update()
 
-        if self.settings.contains('playback'):
-            self.play.selection_json = self.settings.value('playback')
-        if self.settings.contains('record'):
-            self.record.selection_json = self.settings.value('record')
-
+        if self.settings.contains("playback"):
+            self.play.selection_json = self.settings.value("playback")
+        if self.settings.contains("record"):
+            self.record.selection_json = self.settings.value("record")
 
         # noinspection PyUnresolvedReferences
         self.btn_update_playback.clicked.connect(self.play.update)
@@ -118,13 +106,9 @@ class Gui(QMainWindow, Ui_MainWindow):
         self.list_play.clearSelection()
         self.list_record.clearSelection()
 
-    def update_record(self):
-        self.record.update()
-        self.update_lists()
-
     def closeEvent(self, event):
-        self.settings.setValue('playback', self.play.selection_json)
-        self.settings.setValue('record', self.record.selection_json)
+        self.settings.setValue("playback", self.play.selection_json)
+        self.settings.setValue("record", self.record.selection_json)
         self.play.devlist.stop()
         self.record.devlist.stop()
-        print('closing')
+        print("closing")

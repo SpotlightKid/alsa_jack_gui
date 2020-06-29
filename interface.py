@@ -1,5 +1,5 @@
 import re
-from threading import Thread, Event
+from threading import Event, Thread
 from time import sleep
 
 import pexpect
@@ -9,8 +9,7 @@ from alsainfo import SndPcmStream, get_cards
 
 
 class Device:
-    def __init__(self, card, card_name, card_detail, dev, dev_name,
-                 dev_detail, record=False):
+    def __init__(self, card, card_name, card_detail, dev, dev_name, dev_detail, record=False):
         self.card = card
         self.card_name = card_name
         self.card_detail = card_detail
@@ -56,12 +55,16 @@ class DeviceList:
 
     def update(self):
         factory = Device.record if self._record else Device
-        cards = get_cards(SndPcmStream.CAPTURE if self._record else SndPcmStream.PLAYBACK, capabilities=False)
+        cards = get_cards(
+            SndPcmStream.CAPTURE if self._record else SndPcmStream.PLAYBACK, capabilities=False
+        )
         self.list = {}
 
         for card in cards:
             for dev in card.devices:
-                self.list[dev.name] = factory(card.cardno, card.id, card.name, dev.devno, dev.id, dev.name)
+                self.list[dev.name] = factory(
+                    card.cardno, card.id, card.name, dev.devno, dev.id, dev.name
+                )
 
     def __getitem__(self, item):
         return self.list.__getitem__(item)
@@ -73,13 +76,13 @@ class DeviceList:
         for d in self:
             if card == d.card and dev == d.dev:
                 return d
-        raise ValueError('Device hw:{},{} not in list'.format(card, dev))
+        raise ValueError("Device hw:{},{} not in list".format(card, dev))
 
     def byName(self, cname, dname):
         for d in self:
             if d.match_name(cname, dname):
                 return d
-        raise ValueError('Device [{}:{}] not in list'.format(cname, dname))
+        raise ValueError("Device [{}:{}] not in list".format(cname, dname))
 
     def stop(self):
         for d in self.list.values():
@@ -97,12 +100,11 @@ class AudioProcess(QObject):
         super(AudioProcess, self).__init__(parent)
 
         self._command = AudioProcess.CMD_PAT.format(cmd=cmd, name=name, hw=hw)
-        self._process = pexpect.spawn('ls')
+        self._process = pexpect.spawn("ls")
         self._active = Event()
         self._fails = 0
 
-        process_reader = Thread(name="read daemon",
-                                target=self.process_reader)
+        process_reader = Thread(name="read daemon", target=self.process_reader)
         process_reader.setDaemon(True)
         process_reader.start()
 
@@ -138,7 +140,7 @@ class AudioProcess(QObject):
                         self.log_message.emit(msg)
 
                 if not self._process.isalive():
-                    raise pexpect.EOF('Process died after start.')
+                    raise pexpect.EOF("Process died after start.")
 
                 self._fails = 0
             except:
