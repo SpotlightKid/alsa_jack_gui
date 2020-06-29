@@ -17,7 +17,7 @@ class Device:
         self.dev_name = dev_name
         self.dev_detail = dev_detail
         self._in = record
-        self.audio_proc = AudioProcess(self.cmdName, self.card_detail, self.hw)
+        self.audio_proc = AudioProcess(self.cmdName, self.dev_detail, self.hw)
 
     @classmethod
     def record(cls, *args, **kwargs):
@@ -29,8 +29,7 @@ class Device:
 
     @property
     def cmdName(self):
-        # TODO: support alternative bridges, i.e. zita-ajbridge
-        return "alsa_{}".format("in" if self._in else "out")
+        return "zita-a2j" if self._in else "zita-j2a"
 
     def match_name(self, cname, dname):
         return self.card_name == cname and self.dev_name == dname
@@ -97,7 +96,7 @@ class AudioProcess(QObject):
     log_message = pyqtSignal(str)
 
     def __init__(self, cmd, name, hw, parent=None):
-        super(AudioProcess, self).__init__(parent)
+        super().__init__(parent)
 
         self._command = AudioProcess.CMD_PAT.format(cmd=cmd, name=name, hw=hw)
         self._process = pexpect.spawn("ls")

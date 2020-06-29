@@ -3,10 +3,9 @@ Gui
 """
 import json
 
-from PyQt5.QtCore import QObject, QSettings  # , Qt
+from PyQt5.QtCore import QObject, QSettings
 from PyQt5.QtWidgets import QListWidgetItem, QMainWindow
 
-# from PyQt5.QtGui import QIcon
 from gui_ui import Ui_MainWindow
 from interface import DeviceList
 
@@ -16,7 +15,7 @@ class DevWidgetItem(QListWidgetItem):
 
     def __init__(self, device):
         # QObject.__init__(self)
-        super(DevWidgetItem, self).__init__()
+        super().__init__()
         self.device = device
         self.updateText()
         device.audio_proc.delay_changed.connect(self.updateText)
@@ -78,14 +77,12 @@ class GuiDeviceList:
 class Gui(QMainWindow, Ui_MainWindow):
     def __init__(self):
         QObject.__init__(self)
-        super(Gui, self).__init__()
+        super().__init__()
         self.setupUi(self)
-        self.show()
         devs_play = DeviceList(record=False)
         devs_record = DeviceList(record=True)
         self.play = GuiDeviceList(devs_play, self.list_play)
         self.record = GuiDeviceList(devs_record, self.list_record)
-
         self.settings = QSettings("alsa_jack", "playback")
         self.play.update()
         self.record.update()
@@ -99,8 +96,8 @@ class Gui(QMainWindow, Ui_MainWindow):
         self.btn_update_playback.clicked.connect(self.play.update)
         # noinspection PyUnresolvedReferences
         self.btn_update_record.clicked.connect(self.record.update)
-
         self.btn_dc_all.clicked.connect(self.clearSelection)
+        self.show()
 
     def clearSelection(self):
         self.list_play.clearSelection()
