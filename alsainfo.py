@@ -258,7 +258,7 @@ class AlsaDevice(namedtuple('AlsaDevice', ('devno', 'id', 'name', 'stream', 'buf
         return s
 
 
-def get_cards(stream=SndPcmStream.PLAYBACK):
+def get_cards(stream=SndPcmStream.PLAYBACK, capabilities=True):
     if stream not in SndPcmStream:
         raise Exception("Unknown stream type: {}".format(stream))
 
@@ -343,109 +343,110 @@ def get_cards(stream=SndPcmStream.PLAYBACK):
             b_hwdev = create_string_buffer(hwdev.encode('ascii'))
             buffer_sizes = periods = channels = rates = formats = None
 
-            try:
-                check_call(_lib.snd_pcm_open,
-                           (byref(c_pcm_p), b_hwdev, c_int(stream), SND_PCM_NONBLOCK),
-                           "Could not open PCM {stream} device '{dev}'.",
-                           stream=s_stream, dev=hwdev)
-                check_call(_lib.snd_pcm_nonblock, (c_pcm_p, 1),
-                           "Nonblock setting error: ")
-            except LibAsoundError as exc:
-                log.warning(str(exc))
-            else:
+            if capabilities:
                 try:
-                    # Get hardware parameter space
-                    check_call(_lib.snd_pcm_hw_params_malloc, (byref(c_params_p),),
-                               "Could not allocate memory for snd_pcm_hw_params_t.")
-                    check_call(_lib.snd_pcm_hw_params_any, (c_pcm_p, c_params_p),
-                               "Could not get params for {stream} device '{dev}'.",
+                    check_call(_lib.snd_pcm_open,
+                               (byref(c_pcm_p), b_hwdev, c_int(stream), SND_PCM_NONBLOCK),
+                               "Could not open PCM {stream} device '{dev}'.",
                                stream=s_stream, dev=hwdev)
-
-                    # Get supported channel counts
-                    check_call(_lib.snd_pcm_hw_params_get_channels_min, (c_params_p, byref(c_min)),
-                               "Could not get minimum channels count.")
-
-                    check_call(_lib.snd_pcm_hw_params_get_channels_max, (c_params_p, byref(c_max)),
-                               "Could not get maximum channels count.")
-
-                    log.debug("Min/max channels: %i, %i", c_min.value, c_max.value)
-                    channels = tuple(
-                        ch for ch in range(c_min.value, c_max.value + 1)
-                        if _lib.snd_pcm_hw_params_test_channels(c_pcm_p, c_params_p, ch) == 0
-                    )
-
-                    # Get supported sample rates
-                    check_call(_lib.snd_pcm_hw_params_get_rate_min,
-                               (c_params_p, byref(c_min), byref(c_dir)),
-                               "Could not get minimum sample rate.")
-
-                    check_call(_lib.snd_pcm_hw_params_get_rate_max,
-                               (c_params_p, byref(c_max), byref(c_dir)),
-                               "Could not get maximum sample rate.")
-
-                    log.debug("Min/max sample rate: %i, %i", c_min.value, c_max.value)
-                    rates = tuple(
-                        rate for rate in PCM_RATES
-                        if c_min.value <= rate <= c_max.value and
-                        _lib.snd_pcm_hw_params_test_rate(c_pcm_p, c_params_p, rate, 0) == 0
-                    )
-
-                    # Get supported sample formats
-                    check_call(_lib.snd_pcm_format_mask_malloc, (byref(c_fmask_p),),
-                               "Could not allocate memory for snd_pcm_format_mask_t.")
-                    try:
-                        check_call(_lib.snd_pcm_hw_params_get_format_mask, (c_params_p, c_fmask_p),
-                                   "Could not get sample formats.")
-
-                    except LibAsoundError as exc:
-                        log.error(str(exc))
-                    else:
-                        formats = tuple(decode_format_mask(c_fmask_p))
-                        log.debug("Sample formats: %s", ",".join(f[1] for f in formats))
-                    finally:
-                        _lib.snd_pcm_format_mask_free(c_fmask_p)
-
-                    # Get supported period times
-                    check_call(_lib.snd_pcm_hw_params_get_periods_min,
-                               (c_params_p, byref(c_min), byref(c_dir)),
-                               "Could not get minimum periods count.")
-
-                    check_call(_lib.snd_pcm_hw_params_get_periods_max,
-                               (c_params_p, byref(c_max), byref(c_dir)),
-                               "Could not get minimum periods count.")
-
-                    log.debug("Min/max periods count: (%i, %i)", c_min.value, c_max.value)
-                    periods = (c_min.value, c_max.value)
-
-                    # Get supported buffer sizes
-                    check_call(_lib.snd_pcm_hw_params_get_buffer_size_min,
-                               (c_params_p, byref(c_min_long)),
-                               "Could not get minimum buffer time.")
-
-                    check_call(_lib.snd_pcm_hw_params_get_buffer_size_max,
-                               (c_params_p, byref(c_max_long)),
-                               "Could not get minimum buffer time.")
-
-                    log.debug("Min/max buffer time: (%i, %i) us", c_min_long.value,
-                              c_max_long.value)
-                    buffer_sizes = tuple(
-                        size for size in PCM_BUFFER_SIZES
-                        if c_min_long.value <= size <= c_max_long.value and
-                        _lib.snd_pcm_hw_params_test_buffer_size(c_pcm_p, c_params_p, size) == 0
-                    )
-
-                    # List subdevices
-                    for subd in range(0, nsubd):
-                        _lib.snd_pcm_info_set_subdevice(c_pcminfo_p, c_int(subd))
-                        sub_name = _lib.snd_pcm_info_get_subdevice_name(c_pcminfo_p).decode()
-                        log.debug('Discovered subdevice: "%s"', sub_name)
-                        subdevices.append(sub_name)
+                    check_call(_lib.snd_pcm_nonblock, (c_pcm_p, 1),
+                               "Nonblock setting error: ")
                 except LibAsoundError as exc:
-                    log.warning(exc)
-                finally:
-                    _lib.snd_pcm_close(c_pcm_p)
-                    _lib.snd_pcm_hw_params_free(c_params_p)
-                    _lib.snd_pcm_info_free(c_pcminfo_p)
+                    log.warning(str(exc))
+                else:
+                    try:
+                        # Get hardware parameter space
+                        check_call(_lib.snd_pcm_hw_params_malloc, (byref(c_params_p),),
+                                   "Could not allocate memory for snd_pcm_hw_params_t.")
+                        check_call(_lib.snd_pcm_hw_params_any, (c_pcm_p, c_params_p),
+                                   "Could not get params for {stream} device '{dev}'.",
+                                   stream=s_stream, dev=hwdev)
+
+                        # Get supported channel counts
+                        check_call(_lib.snd_pcm_hw_params_get_channels_min, (c_params_p, byref(c_min)),
+                                   "Could not get minimum channels count.")
+
+                        check_call(_lib.snd_pcm_hw_params_get_channels_max, (c_params_p, byref(c_max)),
+                                   "Could not get maximum channels count.")
+
+                        log.debug("Min/max channels: %i, %i", c_min.value, c_max.value)
+                        channels = tuple(
+                            ch for ch in range(c_min.value, c_max.value + 1)
+                            if _lib.snd_pcm_hw_params_test_channels(c_pcm_p, c_params_p, ch) == 0
+                        )
+
+                        # Get supported sample rates
+                        check_call(_lib.snd_pcm_hw_params_get_rate_min,
+                                   (c_params_p, byref(c_min), byref(c_dir)),
+                                   "Could not get minimum sample rate.")
+
+                        check_call(_lib.snd_pcm_hw_params_get_rate_max,
+                                   (c_params_p, byref(c_max), byref(c_dir)),
+                                   "Could not get maximum sample rate.")
+
+                        log.debug("Min/max sample rate: %i, %i", c_min.value, c_max.value)
+                        rates = tuple(
+                            rate for rate in PCM_RATES
+                            if c_min.value <= rate <= c_max.value and
+                            _lib.snd_pcm_hw_params_test_rate(c_pcm_p, c_params_p, rate, 0) == 0
+                        )
+
+                        # Get supported sample formats
+                        check_call(_lib.snd_pcm_format_mask_malloc, (byref(c_fmask_p),),
+                                   "Could not allocate memory for snd_pcm_format_mask_t.")
+                        try:
+                            check_call(_lib.snd_pcm_hw_params_get_format_mask, (c_params_p, c_fmask_p),
+                                       "Could not get sample formats.")
+
+                        except LibAsoundError as exc:
+                            log.error(str(exc))
+                        else:
+                            formats = tuple(decode_format_mask(c_fmask_p))
+                            log.debug("Sample formats: %s", ",".join(f[1] for f in formats))
+                        finally:
+                            _lib.snd_pcm_format_mask_free(c_fmask_p)
+
+                        # Get supported period times
+                        check_call(_lib.snd_pcm_hw_params_get_periods_min,
+                                   (c_params_p, byref(c_min), byref(c_dir)),
+                                   "Could not get minimum periods count.")
+
+                        check_call(_lib.snd_pcm_hw_params_get_periods_max,
+                                   (c_params_p, byref(c_max), byref(c_dir)),
+                                   "Could not get minimum periods count.")
+
+                        log.debug("Min/max periods count: (%i, %i)", c_min.value, c_max.value)
+                        periods = (c_min.value, c_max.value)
+
+                        # Get supported buffer sizes
+                        check_call(_lib.snd_pcm_hw_params_get_buffer_size_min,
+                                   (c_params_p, byref(c_min_long)),
+                                   "Could not get minimum buffer time.")
+
+                        check_call(_lib.snd_pcm_hw_params_get_buffer_size_max,
+                                   (c_params_p, byref(c_max_long)),
+                                   "Could not get minimum buffer time.")
+
+                        log.debug("Min/max buffer time: (%i, %i) us", c_min_long.value,
+                                  c_max_long.value)
+                        buffer_sizes = tuple(
+                            size for size in PCM_BUFFER_SIZES
+                            if c_min_long.value <= size <= c_max_long.value and
+                            _lib.snd_pcm_hw_params_test_buffer_size(c_pcm_p, c_params_p, size) == 0
+                        )
+
+                        # List subdevices
+                        for subd in range(0, nsubd):
+                            _lib.snd_pcm_info_set_subdevice(c_pcminfo_p, c_int(subd))
+                            sub_name = _lib.snd_pcm_info_get_subdevice_name(c_pcminfo_p).decode()
+                            log.debug('Discovered subdevice: "%s"', sub_name)
+                            subdevices.append(sub_name)
+                    except LibAsoundError as exc:
+                        log.warning(exc)
+                    finally:
+                        _lib.snd_pcm_close(c_pcm_p)
+                        _lib.snd_pcm_hw_params_free(c_params_p)
+                        _lib.snd_pcm_info_free(c_pcminfo_p)
 
             devices.append(
                 AlsaDevice(
