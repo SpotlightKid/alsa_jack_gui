@@ -1,19 +1,14 @@
-from PyQt5.QtCore import QObject, pyqtSignal
+import re
 from threading import Thread, Event
 from time import sleep
+
 import pexpect
-import re
+from PyQt5.QtCore import QObject, pyqtSignal
+
+from alsainfo import SndPcmStream, get_cards
 
 
 class Device:
-    LIST_REGEX = re.compile(r"card (\d+):\s*(.*?)\s*\[(.*?)\], "
-                            r"device (\d+):\s*(.*?)\s*\[(.*?)\][\\\r|\\\n]+")
-
-    @staticmethod
-    def record(*args, **kwargs):
-        kwargs["record"] = True
-        return Device(*args, **kwargs)
-
     def __init__(self, card, card_name, card_detail, dev, dev_name,
                  dev_detail, record=False):
         self.card = card
@@ -24,6 +19,11 @@ class Device:
         self.dev_detail = dev_detail
         self._in = record
         self.audio_proc = AudioProcess(self.cmdName, self.card_detail, self.hw)
+
+    @classmethod
+    def record(cls, *args, **kwargs):
+        kwargs["record"] = True
+        return cls(*args, **kwargs)
 
     def __str__(self):
         return self.detail
@@ -50,19 +50,18 @@ class Device:
 
 
 class DeviceList:
-    def __init__(self, upd_command, record=False, regex=Device.LIST_REGEX):
-        self._re = regex
-        self._upd_command = upd_command
+    def __init__(self, record=False):
         self._record = record
-        self.list = {}
-
         self.update()
 
     def update(self):
-        lstr = str(pexpect.run(self._upd_command))
-        lst = self._re.findall(lstr)
-        c = Device.record if self._record else Device
-        self.list = {d.detail: d for d in map(c, *zip(*lst))}
+        factory = Device.record if self._record else Device
+        cards = get_cards(SndPcmStream.CAPTURE if self._record else SndPcmStream.PLAYBACK, capabilities=False)
+        self.list = {}
+
+        for card in cards:
+            for dev in card.devices:
+                self.list[dev.name] = factory(card.cardno, card.id, card.name, dev.devno, dev.id, dev.name)
 
     def __getitem__(self, item):
         return self.list.__getitem__(item)
@@ -145,6 +144,7 @@ class AudioProcess(QObject):
             except:
                 self._fails += 1
                 print("{} failed ({}) :(".format(self._command, self._fails))
+
             sleep(self.sleepTime)
 
     @property

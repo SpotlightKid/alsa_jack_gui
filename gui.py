@@ -92,8 +92,8 @@ class Gui(QMainWindow, Ui_MainWindow):
         super(Gui, self).__init__()
         self.setupUi(self)
         self.show()
-        devs_play = DeviceList('aplay -l')
-        devs_record = DeviceList('arecord -l', True)
+        devs_play = DeviceList(record=False)
+        devs_record = DeviceList(record=True)
         self.play = GuiDeviceList(devs_play, self.list_play)
         self.record = GuiDeviceList(devs_record, self.list_record)
 
